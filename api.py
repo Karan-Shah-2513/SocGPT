@@ -1,27 +1,37 @@
-from flask import Flask, request, jsonify
 from gpt4all import GPT4All
+from flask import Flask, request, jsonify
 
 app = Flask(__name__)
-gpt_model = GPT4All(model_name="orca-mini-3b-gguf2-q4_0.gguf",
-                    model_path='/home/karan/Downloads', allow_download=False)
+model_path = "orca-mini-3b-gguf2-q4_0.gguf"  # Replace with your actual model path
+gpt_model = GPT4All(model_path)
 
-chat_sessions = {}  # Store chat sessions for different clients
+log_content = None
 
+@app.route('/upload_log', methods=['POST'])
+def upload_log():
+    global log_content
+    file = request.files['file']
+    if file:
+        log_content = file.read().decode("utf-8")
+        return jsonify({'message': 'Log file uploaded successfully'})
+    return jsonify({'message': 'No file uploaded'})
 
 @app.route('/generate', methods=['POST'])
 def generate_text():
+    global log_content
     data = request.get_json()
-    user_id = data.get('user_id', None)
     prompt = data.get('prompt')
 
-    if user_id not in chat_sessions:
-        chat_sessions[user_id] = gpt_model.chat_session()
+    if log_content:
+    	# Truncate log content to stay within token limits
+        max_log_tokens = 1500  # Adjust this value as needed
+        truncated_log = log_content[:max_log_tokens]
 
-    chat = chat_sessions[user_id]
-    response = chat.generate(prompt, temp=0)
+        prompt += f"\nLog Context: {truncated_log}"
+
+    response = gpt_model.generate(prompt, temp=0)
 
     return jsonify({'response': response})
-
 
 if __name__ == '__main__':
     app.run(debug=True)
